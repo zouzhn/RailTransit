@@ -1,0 +1,124 @@
+<html>
+
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+		<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+		<script src="FileSaver.js"></script>
+		<script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/jquery/jquery.js"></script>
+		<script type="text/javascript" src="http://api.map.baidu.com/api?v=2.0&ak=U1YCvtrqNiTGdD3p8quHqHKKGpVw2cxH"></script>
+		<style type="text/css">
+			body,
+			html {
+				width: 100%;
+				height: 100%;
+				margin: 0;
+				font-family: "微软雅黑";
+			}
+			
+			#l-map {
+				height: 300px;
+				width: 100%;
+			}
+			
+			#r-result {
+				width: 100%;
+			}
+		</style>
+		<title>重庆市轻轨线路查询</title>
+	</head>
+
+	<body>
+		<input type="text" id="txt" disabled="disabled" />
+		<button id="btn">获取线路的GPS</button>
+		<div id="l-map"></div>
+		<div id="r-result"></div>
+	</body>
+
+</html>
+
+<script type="text/javascript">
+	// 百度地图API功能
+	var map = new BMap.Map("l-map"); // 创建Map实例
+	map.centerAndZoom(new BMap.Point(106.554578, 29.556169), 12); //以重庆市为中心
+
+	//以重庆市为中心进行搜索
+	var busline = new BMap.BusLineSearch('重庆市', { //参考JavaScript API v2.0类：http://lbsyun.baidu.com/cms/jsapi/reference/jsapi_reference.html#a7b37
+		renderOptions: {
+			map: map,
+			panel: "r-result"
+		},
+		onGetBusListComplete: function(result) { //result为BusListResult类型
+			if(result) {
+				var fstLine = result.getBusListItem(0); //获取第一个轻轨列表显示到map上，0表示上面板（正方向），1表示下面板（反方向）
+				busline.getBusLine(fstLine)
+			}
+		},
+		onGetBusLineComplete: function(rs) { //rs为BusLine类型
+			if(rs) { //可以考虑把数据存到数据库中
+				var buslineName = rs.name; //轻轨线路名称
+				var startTime = rs.startTime; //首班车时间
+				var endTime = rs.endTime; //末班车时间
+				var company = rs.company; //轻轨线路所属公司
+				var pathArray = rs.getPath(); //轻轨线路地理坐标数组，数组元素为百度API中的point对象
+				var lens = pathArray.length; //数组长度
+				var points = '';
+				for(var i = 0; i < lens; i++) {
+					points = points + pathArray[i].lng + ',' + pathArray[i].lat + ',';
+				}
+				points = points.substr(0, points.length - 1);
+				points = '[' + points + ']';
+				var busStationsNum = rs.getNumBusStations(); //线路中的轻轨站点数目
+				var busStationsName = ''; //轻轨站名称
+				var busStationsGPS = ''; //轻轨站的GPS坐标
+				for(var i = 0; i < busStationsNum; i++) {
+					busStationsName = busStationsName + '"' + rs.getBusStation(i).name + '"' + ',';
+					busStationsGPS = busStationsGPS + rs.getBusStation(i).position.lng + ',' +
+						rs.getBusStation(i).position.lat + ',';
+				}
+				busStationsName = busStationsName.substr(0, busStationsName.length - 1);
+				busStationsName = '[' + busStationsName + ']';
+				busStationsGPS = busStationsGPS.substr(0, busStationsGPS.length - 1);
+				busStationsGPS = '[' + busStationsGPS + ']';
+				//轻轨站信息：名称和GPS坐标
+				var busStations = '{"railStationsName":' + busStationsName + ',' +
+					'"railStationsGPS":' + busStationsGPS + '}';
+				//所有的轻轨线路信息
+				var buslineInfo = '[{"raillineName":' + '"' + buslineName + '"' + ',' +
+					'"startTime":' + '"' + startTime + '"' + ',' +
+					'"endTime":' + '"' + endTime + '"' + ',' +
+					'"company":' + '"' + company + '"' + ',' +
+					'"railStationsNum":' + busStationsNum + ',' +
+					'"railStations":' + busStations + ',' +
+					'"raillineGPS":' + points + '}]';
+				//保存所有的轻轨线路信息
+				var fileBuslineInfo = new File([buslineInfo], buslineName + '.json', {
+					type: "text/plain;charset=utf-8"
+				});
+				saveAs(fileBuslineInfo);
+			}
+		}
+	});
+
+	function busSearch(busNameKeyword) {
+		//getBusList函数在百度API开发文档中的说明：getBusList(keyword: String)，在用户配置的回调函数中返回轻轨列表结果，其类型为BusListResult
+		//所以，getBusList的参数为字符串类型。即busNameKeyword为字符串。
+		busline.getBusList(busNameKeyword);
+	}
+
+	var railTransitData = null; //轨道交通的名称
+	$.ajax({
+		type: 'get',
+		url: 'data.json',
+		async: false,
+		success: function(data) {
+			railTransitData = data;
+		},
+		error: function(e) {
+			alert('获取data.json失败');
+		}
+	});
+	
+	for(var i = 0; i < railTransitData.length; i++) {
+		busSearch(railTransitData[i].railTransitName);
+	}
+</script>
